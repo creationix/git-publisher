@@ -1,0 +1,26 @@
+{
+  "name": "git-publisher",
+  "version": "0.0.0",
+  "description": "A js-git addon that makes it easy to publish repos.",
+  "main": "publisher.js",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/creationix/git-publisher.git"
+  },
+  "keywords": [
+    "js-git",
+    "publish"
+  ],
+  "author": "Tim Caswell <tim@creationix.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/creationix/git-publisher/issues"
+  },
+  "homepage": "https://github.com/creationix/git-publisher",
+  "devDependencies": {
+    "js-github": "~0.1.0",
+    "js-linker": "~0.0.2",
+    "simple-mime": "~0.0.8",
+    "js-git": "~0.6.2"
+  }
+}
