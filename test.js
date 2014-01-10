@@ -118,14 +118,17 @@ function fakeRequire(name) {
 
 // Get the root, but throttle request rate.
 var root;
-var last;
+var last = Date.now();
 repo.loadAs("commit", "refs/heads/master", onRoot);
 function getRoot() {
-  if (Date.now() - last > 500) repo.loadAs("commit", "refs/heads/master", onRoot);
+  var now = Date.now();
+  if ((now - last) > 5000) {
+    last = now;
+    repo.loadAs("commit", "refs/heads/master", onRoot);
+  }
   return root;
 }
 function onRoot(err, commit) {
-  last = Date.now();
   if (err) console.error(err.stack);
   if (commit) root = commit.tree;
 }
