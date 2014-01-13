@@ -1,94 +1,41 @@
 var accessToken = process.env.TOKEN;
 var jsGithub = require('js-github');
 var vm = require('vm');
-var urlParse = require('url').parse;
-var getMime = require('simple-mime')('application/octet-stream');
+var handleRequest = require('git-publish-http');
+var gitPublisher = require('./.');
 var http = require('http');
 
-var repo = jsGithub("creationix/exploder", accessToken);
-require('./.')(repo, compileModule);
+var repos = {};
 
-http.createServer(onRequest).listen(8080, function () {
-  console.log("Server listening at http://localhost:8080/");
+var server = http.createServer(onRequest);
+server.listen(process.env.PORT || 8080, function () {
+  console.log("Server listening at http://localhost:%s/", server.address().port);
 });
 
 function onRequest(req, res) {
+
+  var host = req.headers.host && req.headers.host.match(/^([^.]*)/)[1];
+  if (!host) {
+    res.statusCode = 404;
+    return res.end("Missing Host header");
+  }
+
+  var repo = repos[host];
+  if (!repo) {
+    repo = repos[host] = jsGithub("creationix/" + host, accessToken);
+    gitPublisher(repo, compileModule);
+
+    repo.getRoot = rootCheck(repo);
+  }
+
+  // Log requests
   var end = res.end;
   res.end = function () {
     console.log(req.method, req.url, res.statusCode);
     return end.apply(this, arguments);
   };
 
-  var root = getRoot();
-  if (!root) return onError(new Error("root not loaded yet"));
-
-    // Ensure the request is either HEAD or GET by rejecting everything else
-  var head = req.method === "HEAD";
-  if (!head && req.method !== "GET") {
-    res.statusCode = 405;
-    res.setHeader("Allow", "HEAD,GET");
-    res.end();
-    return;
-  }
-
-  var path = urlParse(req.url).pathname;
-  var etag = req.headers['if-none-match'];
-
-  repo.servePath(root, path, etag, onEntry);
-
-  function onEntry(err, result) {
-    if (result === undefined) return onError(err);
-    if (result.redirect) {
-      // User error requiring redirect
-      res.statusCode = 301;
-      res.setHeader("Location", result.redirect);
-      res.end();
-      return;
-    }
-
-    if (result.internalRedirect) {
-      path = result.internalRedirect;
-      res.setHeader("Location", path);
-      return repo.servePath(root, path, etag, onEntry);
-    }
-
-    res.setHeader("ETag", result.etag);
-    if (etag === result.etag) {
-      // etag matches, no change
-      res.statusCode = 304;
-      res.end();
-      return;
-    }
-
-    res.setHeader("Content-Type", result.mime || getMime(path));
-    if (head) {
-      return res.end();
-    }
-    result.fetch(function (err, body) {
-      if (body === undefined) return onError(err);
-
-      if (Buffer.isBuffer(body)) {
-        res.setHeader("Content-Length", body.length);
-      }
-      if (typeof body === "string") {
-        res.setHeader("Content-Length", Buffer.byteLength(body));
-      }
-      res.end(body);
-    });
-  }
-
-  function onError(err) {
-    if (!err) {
-      // Not found
-      res.statusCode = 404;
-      res.end("Not found in tree " + root + ": " + path + "\n");
-      return;
-    }
-    // Server error
-    res.statusCode = 500;
-    res.end(err.stack + "\n");
-    console.error(err.stack);
-  }
+  handleRequest(repo, repo.getRoot(), req, res);
 }
 
 function compileModule(js, filename) {
@@ -113,22 +60,29 @@ function fakeRequire(name) {
   if (name === "sha1") return require('js-git/lib/sha1.js');
   if (name === "parallel") return require('js-git/lib/parallel.js');
   if (name === "path-join") return require('js-linker/pathjoin.js');
+  if (name === "mine") return require('js-linker/mine.js');
   throw new Error("Invalid require in sandbox: " + name);
 }
 
-// Get the root, but throttle request rate.
-var root;
-var last = Date.now();
-repo.loadAs("commit", "refs/heads/master", onRoot);
-function getRoot() {
-  var now = Date.now();
-  if ((now - last) > 5000) {
-    last = now;
-    repo.loadAs("commit", "refs/heads/master", onRoot);
+
+function rootCheck(repo) {
+  // Get the root, but throttle request rate.
+  var root;
+  var last = Date.now();
+  repo.loadAs("commit", "refs/heads/master", onRoot);
+  return getRoot;
+
+  function getRoot() {
+    var now = Date.now();
+    if ((now - last) > 5000) {
+      last = now;
+      repo.loadAs("commit", "refs/heads/master", onRoot);
+    }
+    return root;
   }
-  return root;
-}
-function onRoot(err, commit) {
-  if (err) console.error(err.stack);
-  if (commit) root = commit.tree;
+
+  function onRoot(err, commit) {
+    if (err) console.error(err.stack);
+    if (commit) root = commit.tree;
+  }
 }
