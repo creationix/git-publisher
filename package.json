@@ -18,6 +18,7 @@
   },
   "homepage": "https://github.com/creationix/git-publisher",
   "devDependencies": {
+    "git-publish-http": "~0.0.0",
     "js-github": "~0.1.0",
     "js-linker": "~0.0.2",
     "simple-mime": "~0.0.8",
