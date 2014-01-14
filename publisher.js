@@ -6,13 +6,7 @@ var cache = {};
 // Cached compiled directories that contain wildcards.
 var dirs = {};
 
-// Cached compiled filter modules by name
-var modules = {};
-
-
-var compileModule;
-module.exports = function (repo, compiler) {
-  compileModule = compiler;
+module.exports = function (repo) {
   repo.servePath = servePath;
   repo.pathToEntry = pathToEntry;
 };
@@ -239,49 +233,14 @@ function servePath(root, path, reqEtag, callback) {
         args: args,
         name: name
       };
-      if (!target) return handleCommand(req, callback);
+      if (!target) return repo.handleCommand(req, callback);
 
       return repo.servePath(root, pathJoin(base, target), null, function (err, target) {
         if (!target) return callback(err);
         req.target = target;
-        handleCommand(req, callback);
+        repo.handleCommand(req, callback);
       });
     }
   }
 
-}
-
-function handleCommand(req, callback) {
-  var repo = req.repo;
-  var root = req.root;
-  var name = req.name;
-  var top = cache[root];
-  var dir = top.filters;
-  if (!dir) return callback(new Error("Missing filters in root: " + root));
-  var tree = cache[dir.hash];
-  if (!tree) {
-    return repo.loadAs("tree", dir.hash, function (err, tree) {
-      if (err) return callback(err);
-      cache[dir.hash] = tree;
-      return handleCommand(req, callback);
-    });
-  }
-  var entry = tree[name + ".js"];
-  if (!entry) {
-    return callback(new Error("No such filter '" + req.name + "' in root: " + root));
-  }
-  var module = modules[name];
-  // If the module is stale, release the reference.
-  if (module && module.hash !== entry.hash) module = modules[name] = null;
-  if (!module) {
-    return repo.loadAs("text", entry.hash, function (err, js) {
-      if (err) return callback(err);
-      modules[name] = {
-        hash: entry.hash,
-        fn: compileModule(js, "git:" + root + ":/filters/" + name + ".js")
-      };
-    return handleCommand(req, callback);
-    });
-  }
-  module.fn(req, callback);
 }
