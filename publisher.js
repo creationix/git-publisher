@@ -224,8 +224,9 @@ function servePath(root, path, reqEtag, callback) {
       var target = entry.link.substr(0, index);
       var args = entry.link.substr(index + 1).split(" ");
       var name = args.shift();
-      var req ={
+      var req = {
         base: base,
+        path: path,
         repo: repo,
         root: root,
         etag: reqEtag,
@@ -235,8 +236,10 @@ function servePath(root, path, reqEtag, callback) {
       };
       if (!target) return repo.handleCommand(req, callback);
 
-      return repo.servePath(root, pathJoin(base, target), null, function (err, target) {
+      var targetPath = pathJoin(base, target);
+      return repo.servePath(root, targetPath, null, function (err, target) {
         if (!target) return callback(err);
+        target.path = targetPath;
         req.target = target;
         repo.handleCommand(req, callback);
       });
